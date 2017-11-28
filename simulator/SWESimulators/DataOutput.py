@@ -25,11 +25,13 @@ from datetime import date
 from netCDF4 import Dataset
 
 class CTCSNetCDFWriter:
-    def __init__(self, outfilename, nx, ny, dx, dy, num_layers=1, ignore_ghostcells=True, \
+    def __init__(self, outfilename, nx, ny, dx, dy, H=None, num_layers=1, ignore_ghostcells=True, \
                  width=1, height=1):
         self.ncfile = Dataset(outfilename,'w', clobber=True) 
         self.ignore_ghostcells = ignore_ghostcells
         self.num_layers = num_layers
+
+        self.ncfile.Conventions = "CF-1.4"
         
         #Create dimensions 
         self.ncfile.createDimension('time', None) #Unlimited time dimension
@@ -60,13 +62,19 @@ class CTCSNetCDFWriter:
         #y_v = self.ncfile.createVariable('y_v', np.dtype('float32').char, 'y_v')
         x = self.ncfile.createVariable('x', np.dtype('float32').char, 'x')
         y = self.ncfile.createVariable('y', np.dtype('float32').char, 'y')
+
+        self.nc_time.long_name = "time since initialization"
+        self.nc_time.calendar = "gregorian"
+        self.nc_time.field = "time, scalar, series"
+        self.nc_time.axis = "T"
+        self.nc_time.standard_name = "time"
         
         x.standard_name = "projection_x_coordinate"
         y.standard_name = "projection_y_coordinate"
         
         x.axis = "X"
         y.axis = "Y"
-        
+                
         #Create bogus projection variable
         self.nc_proj = self.ncfile.createVariable('projection_stere', np.dtype('int32').char)
         self.nc_proj.grid_mapping_name = 'polar_stereographic'
@@ -119,13 +127,26 @@ class CTCSNetCDFWriter:
         self.nc_land.standard_name = 'land_binary_mask'
         self.nc_land.units = '1'
         self.nc_land[:] = 0
+
+        # Write initial conditions to file
+        if H is not None:
+            self.nc_H = self.ncfile.createVariable('H', np.dtype('float32').char, ('time', 'y', 'x'), zlib=True)
+            self.nc_H.standard_name = 'write water_surface_reference_datum_altitude'
+            self.nc_H.grid_mapping = 'projection_stere'
+            self.nc_H.coordinates = 'lon lat'
+            self.nc_H.units = 'meter'
+            self.nc_H[0, :] = H[0, :] # writing initial condition to timestep 0
         
+        self.nc_eta = self.ncfile.createVariable('eta', np.dtype('float32').char, ('time', 'y', 'x'), zlib=True)
         self.nc_u = self.ncfile.createVariable('u', np.dtype('float32').char, ('time', 'y', 'x'), zlib=True)
         self.nc_v = self.ncfile.createVariable('v', np.dtype('float32').char, ('time', 'y', 'x'), zlib=True)
+        self.nc_eta.standard_name = 'water_surface_height_above_reference_datum'
         self.nc_u.standard_name = 'x_sea_water_velocity'
         self.nc_v.standard_name = 'y_sea_water_velocity'
+        self.nc_eta.grid_mapping = 'projection_stere'
         self.nc_u.grid_mapping = 'projection_stere'
         self.nc_v.grid_mapping = 'projection_stere'
+        self.nc_eta.coordinates = 'lon lat'
         self.nc_u.coordinates = 'lon lat'
         self.nc_v.coordinates = 'lon lat'
         
@@ -138,6 +159,7 @@ class CTCSNetCDFWriter:
         #self.nc_eta.units = 'm'
         #self.nc_u.units = 'm'
         #self.nc_v.units = 'm'
+	self.nc_eta.units = 'meter'
         self.nc_u.units = 'meter second-1'
         self.nc_v.units = 'meter second-1'
 
